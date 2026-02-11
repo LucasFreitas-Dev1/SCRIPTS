@@ -1,0 +1,11 @@
+INCLUDE <icon>.  
+
+* Garantindo que sejam as bolinhas (LEDs) 
+
+ WRITE: / icon_led_green AS ICON, ' - Processado com sucesso',  
+
+                / icon_led_yellow AS ICON, ' - Aguardando aprovação', 
+
+ 	 / icon_led_red AS ICON, ' - Erro no processamento',  
+
+ / icon_led_blue AS ICON, ' - Informação adicional'. 
