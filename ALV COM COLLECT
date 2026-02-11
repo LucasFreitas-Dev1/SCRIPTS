@@ -1,0 +1,271 @@
+*&---------------------------------------------------------------------* 
+*& Report ZLSF_TREINO2 
+*&---------------------------------------------------------------------* 
+*& 
+*&---------------------------------------------------------------------* 
+REPORT zlsf_treino2. 
+ 
+"tabelas que serao usadas 
+TABLES: ekko, 
+        ekpo, 
+        eket, 
+        ekbe. 
+ 
+" type-pools ..... 
+" Essa declaração e necessária pois e o grupo de tipos usados no ALV. 
+TYPE-POOLS: slis. 
+ 
+" Declarações usadas no ALV. 
+" Declaração da tabela e da estrutura que estaram com as informações dos campos 
+" do ALV 
+DATA : it_fieldcat TYPE slis_t_fieldcat_alv, 
+       st_fieldcat TYPE slis_fieldcat_alv. 
+ 
+PERFORM : z_feed_table, 
+          z_fieldcat, 
+          z_alv. 
+ 
+"estruturas para a tabela interna 
+ 
+TYPES: BEGIN OF ty_ekko, 
+         ebeln TYPE ekko-ebeln, 
+         bukrs TYPE ekko-bukrs, 
+         ernam TYPE ekko-ernam, 
+       END OF ty_ekko, 
+ 
+       BEGIN OF ty_ekpo, 
+         ebeln TYPE ekpo-ebeln, 
+         ebelp TYPE ekpo-ebelp, 
+         matnr TYPE ekpo-matnr, 
+         NETPR  TYPE EKPO-NETPR, 
+         NETWR type ekpo-NETWR, 
+       END OF ty_ekpo, 
+ 
+       BEGIN OF ty_eket, 
+         ebeln TYPE eket-ebeln, 
+         ebelp TYPE eket-ebelp, 
+         wemng TYPE eket-wemng, 
+         menge TYPE eket-menge, 
+       END OF ty_eket, 
+ 
+       BEGIN OF ty_ekbe, 
+         ebeln TYPE ekbe-ebeln, 
+         ebelp TYPE ekbe-ebelp, 
+         vgabe TYPE ekbe-vgabe, 
+       END OF ty_ekbe, 
+ 
+       BEGIN OF ty_alv, 
+         ebeln TYPE ekko-ebeln, 
+         bukrs TYPE ekko-bukrs, 
+         ernam TYPE ekko-ernam, 
+         ebelp TYPE ekpo-ebelp, 
+         matnr TYPE ekpo-matnr, 
+         wemng TYPE eket-wemng, 
+         vgabe TYPE ekbe-vgabe, 
+         menge TYPE eket-menge, 
+         NETPR  TYPE ekpo-NETPR, "preço liquido 
+         NETWR type ekpo-NETWR, 
+         TOTAL TYPE ekpo-NETWR, 
+       END OF ty_alv, 
+ 
+       BEGIN OF ty_collect, 
+         NETWR type ekpo-NETWR, 
+         ebeln TYPE ekko-ebeln, 
+       END OF ty_collect. 
+ 
+ 
+ 
+"tabelas internas 
+DATA: it_ekko TYPE TABLE OF ty_ekko, 
+      wa_ekko TYPE ty_ekko. 
+ 
+DATA: it_ekpo TYPE TABLE OF ty_ekpo, 
+      wa_ekpo TYPE ty_ekpo. 
+ 
+DATA: it_eket TYPE TABLE OF ty_eket, 
+      wa_eket TYPE ty_eket. 
+ 
+DATA: it_ekbe TYPE TABLE OF ty_ekbe, 
+      wa_ekbe TYPE ty_ekbe. 
+ 
+DATA: it_alv TYPE TABLE OF ty_alv, 
+      wa_alv TYPE ty_alv. 
+ 
+DATA: it_collect TYPE TABLE OF ty_collect, 
+      wa_collect TYPE ty_collect. 
+ 
+ 
+*PARAMETERS: p_num(30) TYPE c. 
+ 
+"variavel para o select-options 
+DATA: V_NUM TYPE EKKO-EBELN. 
+ 
+"puxa dois pedidos de compra 
+SELECT-OPTIONS S_NUM FOR V_NUM. 
+ 
+START-OF-SELECTION. 
+ 
+ 
+FORM z_feed_table. 
+ 
+  SELECT ebeln bukrs ernam 
+  INTO TABLE it_ekko 
+  FROM ekko 
+  WHERE ebeln IN S_num. 
+ 
+ 
+  IF it_ekko IS NOT INITIAL. 
+ 
+    SELECT ebeln ebelp matnr NETPR NETWR 
+    INTO TABLE it_ekpo 
+    FROM ekpo 
+    FOR ALL ENTRIES IN it_ekko 
+    WHERE ebeln = it_ekko-ebeln. 
+ 
+    SELECT ebeln ebelp wemng menge 
+    INTO TABLE it_eket 
+    FROM eket 
+    FOR ALL ENTRIES IN it_ekko 
+    WHERE ebeln = it_ekko-ebeln. 
+ 
+    SELECT ebeln ebelp vgabe 
+    INTO TABLE it_ekbe 
+    FROM ekbe 
+    FOR ALL ENTRIES IN it_ekko 
+    WHERE ebeln = it_ekko-ebeln. 
+ 
+  ENDIF. 
+ 
+ 
+ 
+  LOOP AT it_ekko INTO wa_ekko. 
+ 
+    wa_alv-ebeln = wa_ekko-ebeln. 
+    wa_alv-bukrs = wa_ekko-bukrs. 
+    wa_alv-ernam = wa_ekko-ernam. 
+ 
+ 
+    LOOP AT it_ekpo INTO wa_ekpo WHERE ebeln = wa_ekko-ebeln. 
+      wa_alv-ebelp = wa_ekpo-ebelp. 
+      wa_alv-matnr = wa_ekpo-matnr. 
+      wa_alv-NETPR =  wa_ekpo-NETPR. 
+      wa_alv-netwr = wa_ekpo-netwr. 
+ 
+      wa_collect-ebeln = wa_ekko-ebeln. 
+      wa_collect-netwr = wa_ekpo-netwr. 
+ 
+      COLLECT wa_collect INTO it_collect. 
+ 
+ 
+      READ TABLE it_eket INTO wa_eket WITH KEY ebeln = wa_ekko-ebeln 
+                                               ebelp = wa_ekpo-ebelp. 
+      IF sy-subrc IS INITIAL. 
+        wa_alv-wemng = wa_eket-wemng. 
+        wa_alv-ebelp = wa_ekpo-ebelp. 
+        wa_alv-menge = wa_eket-menge. 
+      ENDIF. 
+ 
+      READ TABLE it_ekbe INTO wa_ekbe WITH KEY ebeln = wa_ekko-ebeln 
+                                               ebelp = wa_ekpo-ebelp. 
+      IF sy-subrc IS INITIAL. 
+        wa_alv-vgabe = wa_ekbe-vgabe. 
+        wa_alv-ebelp = wa_ekpo-ebelp. 
+      ENDIF. 
+ 
+      APPEND wa_alv TO it_alv. 
+ 
+BREAK-POINT. 
+    ENDLOOP. 
+ 
+  ENDLOOP. 
+ 
+ 
+ENDFORM. 
+ 
+*&---------------------------------------------------------------------* 
+*&      Form  Z_FIELDCAT 
+*&---------------------------------------------------------------------* 
+" Por melhores praticas eu criei um form pra trata com o fieldcat que significa 
+" catalogo de campos, 
+FORM z_fieldcat . 
+  " Este perfome alimenta a tabela que será utilizada na função que cria um ALV 
+  " pois na função eh necessário informar os campos é suas propriedades, entrando 
+  " no tipo da estrutura e da tabela di fieldcat vc verá o tanto de parametros que 
+  " um campo pode ter . 
+ 
+  " Não lembra muita coisa sobre Perform, clique aki : 
+ 
+  " http://abapjuniores.blogspot.com/2011/04/performs.html 
+ 
+  PERFORM z_feed_fieldcat USING: 
+    "Fname  Seltext                 check   Edit  Col_pos 
+    'EBELN' 'Doc. Compras'          ' '    ' '    0        , 
+    'BUKRS' 'EMPRESA'               ' '    ' '    1        , 
+    'ERNAM' 'Criado por'            ' '    ' '    2        , 
+    'EBELP' 'ITEM'                  ' '    ' '    3        , 
+    'MATNR' 'Tipo de material'      ' '    ' '    4        , 
+    'MENGE' 'Quantidade'            ' '    ' '    5        , 
+    'NETPR' 'Valor'                 ' '    ' '    6        , 
+    'NETWR' 'Valor liquido'         ' '    ' '    7        , 
+    'WEMNG' 'Saido'                 ' '    ' '    8        , 
+    'VGABE' 'Tipo de operação'      ' '    ' '    9        , 
+    'TOTAL' 'Total'                 ' '    ' '    10       . 
+ 
+ 
+ 
+ 
+  . 
+ 
+ENDFORM.                    " Z_FIELDCAT 
+ 
+*&---------------------------------------------------------------------* 
+*&      Form  Z_FEED_FIELDCAT 
+*&---------------------------------------------------------------------* 
+FORM z_feed_fieldcat  USING    fieldname 
+                               seltext_m 
+                               checkbox 
+                               edit 
+                               col_pos . 
+ 
+  st_fieldcat-fieldname   = fieldname.      " Nome do campo 
+  st_fieldcat-seltext_m   = seltext_m.      " texto do campo 
+  st_fieldcat-checkbox    = checkbox.       " se o campo é do tipo CheckBox 
+  st_fieldcat-edit        = edit.           " se o campo pode ser editavel 
+  st_fieldcat-col_pos     = col_pos.        "Em que posição fica a coluna 
+  " Coloca a estrutura alimentada na Tabela. 
+  APPEND st_fieldcat TO it_fieldcat. 
+  " Limpa a estrutura e volta pra poxima linha do form. 
+  CLEAR  st_fieldcat. 
+ENDFORM.                    " Z_FEED_FIELDCAT 
+ 
+*&---------------------------------------------------------------------* 
+*&      Form  Z_ALV 
+*&---------------------------------------------------------------------* 
+FORM z_alv . 
+  "  Aki tah o prato principal deste Post, a function que torna o ALV em 
+  " realidade, como vc pode ver esta function tem muitos parametros de exporting 
+  " cada um com seu objetivo para que o ALV saia bunitinho, eu ia colocar 
+  " um post falando sobre essa function, mas são muitas as propriedades 
+  " entaum vou fazer ao contrário essa, depois que fala sobre cada propriedade 
+  " eu lanço um post sobre esta function com o link explicando cada 
+  " parametro, não sei quando, mais um dia eu termino rsrs. 
+  " Aki eu soh estou preenchendo os parametros minimos pra que a function 
+  " funcione, 
+  " Obs.: se vc naum quiser colocar o field catalog tudo bem mas aih vc vai 
+  " ter que colocar uma estrutura z ou naum no parametro 'I_STRUCTURE_NAME'. 
+ 
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY' 
+    EXPORTING 
+      i_callback_program = sy-repid    " Nome do programa 
+      it_fieldcat        = it_fieldcat " catalogo de campos 
+    TABLES 
+      t_outtab           = it_ALV   " Tabela com os dados 
+    EXCEPTIONS 
+      program_error      = 1 
+      OTHERS             = 2. 
+  IF sy-subrc <> 0. 
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno 
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4. 
+  ENDIF. 
+ 
+ENDFORM.                    " Z_ALV 
