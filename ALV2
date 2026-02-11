@@ -1,0 +1,232 @@
+REPORT z_alv_basico. 
+ 
+" Tabelas transparentes .... 
+TABLES vbak. 
+. 
+" type-pools ..... 
+" Essa declaração e necessária pois e o grupo de tipos usados no ALV. 
+TYPE-POOLS: slis 
+           . 
+ 
+" Tipos .... 
+ 
+TYPES: BEGIN OF ty_vbak, 
+         vbeln TYPE vbak-vbeln, 
+       END OF ty_vbak, 
+ 
+       BEGIN OF ty_vbap, 
+         vbeln TYPE vbap-vbeln, 
+         matnr TYPE vbap-matnr, 
+       END OF ty_vbap, 
+ 
+       BEGIN OF TY_vbuk, 
+         vbeln TYPE vbuk-vbeln, 
+         lfstk TYPE vbuk-lfstk, 
+       END OF ty_vbuk, 
+ 
+       BEGIN OF ty_vbrk, 
+         vbeln TYPE vbrk-vbeln, 
+         netwr TYPE vbrk-netwr, 
+       END OF ty_vbrk, 
+ 
+       BEGIN OF ty_alv, 
+         vbeln TYPE vbak-vbeln, "numero do doc de vendas (pedido) 
+         kunnr TYPE kna1-kunnr, "cliente 
+         matnr TYPE vbap-matnr, "material 
+         lfstk TYPE vbuk-lfstk, "status de remessa 
+         netwr TYPE vbrk-netwr, "VALOR DA FATURA 
+       END OF ty_alv. 
+ 
+ 
+" Estruturas .... 
+DATA: it_vbak TYPE TABLE OF ty_vbak, 
+      wa_vbak TYPE ty_vbak. 
+ 
+DATA: it_vbap TYPE TABLE OF TY_vbap, 
+      wa_vbap TYPE ty_vbap. 
+ 
+DATA: it_vbuk TYPE TABLE OF TY_vbuk, 
+      wa_vbuk TYPE ty_vbuk. 
+ 
+DATA: it_vbrk TYPE TABLE OF ty_vbrk, 
+      wa_vbrk TYPE ty_vbrk. 
+ 
+DATA: it_alv TYPE TABLE OF ty_alv, 
+      wa_alv TYPE ty_alv. 
+ 
+" Declarações usadas no ALV. 
+" Declaração da tabela e da estrutura que estaram com as informações dos campos 
+" do ALV 
+DATA : it_fieldcat TYPE slis_t_fieldcat_alv, 
+       st_fieldcat TYPE slis_fieldcat_alv 
+       . 
+ 
+" Tela de seleção ..... 
+*SELECTION-SCREEN BEGIN OF BLOCK b1. 
+*SELECT-OPTIONS : 
+*    so_matnr FOR mara-matnr NO INTERVALS,   " Nº do material 
+*    so_pstat FOR mara-pstat NO INTERVALS    " Status de atualização 
+*                . 
+* 
+*SELECTION-SCREEN END OF BLOCK b1. 
+ 
+ 
+ 
+START-OF-SELECTION. 
+ 
+  PERFORM : z_feed_table, 
+            z_fieldcat, 
+            z_alv 
+           . 
+ 
+*&---------------------------------------------------------------------* 
+*&      Form  Z_feed_table 
+*&---------------------------------------------------------------------* 
+  " Fazendo um select simples pra traze algum dado pra nos podemos visualizar 
+  " no nosso ALV bunitão. 
+ 
+  " não entende sobre select, clique aki : 
+ 
+  " http://abapjuniores.blogspot.com/2011/06/for-all-entries-in-basico.html 
+ 
+FORM z_feed_table . 
+ 
+  SELECT vbeln 
+  INTO TABLE it_vbak 
+  FROM vbak. 
+ 
+ 
+*Buscar o numero do material, para isso tem acessar VBAK-VBELN igual VBAP-VBELN e buscar o campo VBAP-MATNR 
+  IF it_vbak[] IS NOT INITIAL. 
+    SELECT vbeln matnr UP TO 10 ROWS "TRAZER NO MAXIMO 10 LINHAS 
+    INTO TABLE it_vbap 
+    FROM vbap 
+    FOR ALL ENTRIES IN it_vbak 
+    WHERE vbeln = it_vbak-vbeln. 
+ 
+*Buscar status de remessa e valor faturado, para isso tem acessar VBAK-VBELN igual VBUK-VBELN e buscar o campo VBUK-LFSTK 
+ 
+    SELECT vbeln lfstk 
+    INTO TABLE it_vbuk 
+    FROM vbuk 
+    FOR ALL ENTRIES IN it_vbak 
+    WHERE vbeln = it_vbak-vbeln. 
+ 
+*Buscar o Valor Faturado, para isso tem que acessar VBAK-VBELN igual VBRK-VBELN e trazer o campo VBRK-NETWR 
+ 
+    SELECT vbeln netwr 
+    INTO TABLE it_vbrk 
+    FROM vbrk 
+    FOR ALL ENTRIES IN IT_VBaK 
+    WHERE vbeln = it_vbak-vbeln. 
+ 
+  ENDIF. 
+ 
+ 
+  LOOP AT it_vbak INTO wa_vbak. 
+ 
+    wa_alv-vbeln = wa_vbak-vbeln. 
+ 
+    READ TABLE it_vbap INTO wa_vbap WITH KEY vbeln = wa_vbak-vbeln. 
+    IF sy-subrc IS INITIAL. 
+      wa_alv-matnr = wa_vbap-matnr. 
+ 
+    ENDIF. 
+ 
+    READ TABLE it_vbuk INTO wa_vbuk WITH KEY vbeln = wa_vbak-vbeln. 
+    IF sy-subrc IS INITIAL. 
+      wa_alv-lfstk = wa_vbuk-lfstk. 
+ 
+    ENDIF. 
+ 
+    READ TABLE it_vbrk INTO wa_vbrk WITH KEY vbeln = wa_vbak-vbeln. 
+    IF sy-subrc IS INITIAL. 
+      wa_alv-netwr = wa_vbrk-netwr. 
+ 
+    ENDIF. 
+ 
+ 
+    APPEND wa_alv TO it_alv. 
+ 
+  ENDLOOP. 
+  . 
+ 
+ENDFORM.                    " Z_feed_table 
+ 
+*&---------------------------------------------------------------------* 
+*&      Form  Z_FIELDCAT 
+*&---------------------------------------------------------------------* 
+" Por melhores praticas eu criei um form pra trata com o fieldcat que significa 
+" catalogo de campos, 
+FORM z_fieldcat . 
+  " Este perfome alimenta a tabela que será utilizada na função que cria um ALV 
+  " pois na função eh necessário informar os campos é suas propriedades, entrando 
+  " no tipo da estrutura e da tabela di fieldcat vc verá o tanto de parametros que 
+  " um campo pode ter . 
+ 
+  " Não lembra muita coisa sobre Perform, clique aki : 
+ 
+  " http://abapjuniores.blogspot.com/2011/04/performs.html 
+ 
+  PERFORM z_feed_fieldcat USING : 
+    "Fname  Seltext                 check   Edit  Col_pos 
+    'MATNR' 'Material'              ' '    ' '    0        , 
+    'ERSDA' 'Data de criação'       ' '    ' '    1        , 
+    'ERNAM' 'Nome do responsável'   ' '    ' '    2        , 
+    'PSTAT' 'Status'                ' '    ' '    3        , 
+    'MTART' 'Tipo de material'      ' '    ' '    4 
+            . 
+ 
+ENDFORM.                    " Z_FIELDCAT 
+ 
+*&---------------------------------------------------------------------* 
+*&      Form  Z_FEED_FIELDCAT 
+*&---------------------------------------------------------------------* 
+FORM z_feed_fieldcat  USING    fieldname 
+                               seltext_m 
+                               checkbox 
+                               edit 
+                               col_pos . 
+ 
+  st_fieldcat-fieldname   = fieldname.      " Nome do campo 
+  st_fieldcat-seltext_m   = seltext_m.      " texto do campo 
+  st_fieldcat-checkbox    = checkbox.       " se o campo é do tipo CheckBox 
+  st_fieldcat-edit        = edit.           " se o campo pode ser editavel 
+  st_fieldcat-col_pos     = col_pos.        "Em que posição fica a coluna 
+  " Coloca a estrutura alimentada na Tabela. 
+  APPEND st_fieldcat TO it_fieldcat. 
+  " Limpa a estrutura e volta pra poxima linha do form. 
+  CLEAR  st_fieldcat. 
+ENDFORM.                    " Z_FEED_FIELDCAT 
+ 
+*&---------------------------------------------------------------------* 
+*&      Form  Z_ALV 
+*&---------------------------------------------------------------------* 
+FORM z_alv . 
+  "  Aki tah o prato principal deste Post, a function que torna o ALV em 
+  " realidade, como vc pode ver esta function tem muitos parametros de exporting 
+  " cada um com seu objetivo para que o ALV saia bunitinho, eu ia colocar 
+  " um post falando sobre essa function, mas são muitas as propriedades 
+  " entaum vou fazer ao contrário essa, depois que fala sobre cada propriedade 
+  " eu lanço um post sobre esta function com o link explicando cada 
+  " parametro, não sei quando, mais um dia eu termino rsrs. 
+  " Aki eu soh estou preenchendo os parametros minimos pra que a function 
+  " funcione, 
+  " Obs.: se vc naum quiser colocar o field catalog tudo bem mas aih vc vai 
+  " ter que colocar uma estrutura z ou naum no parametro 'I_STRUCTURE_NAME'. 
+ 
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY' 
+    EXPORTING 
+      i_callback_program = sy-repid    " Nome do programa 
+      it_fieldcat        = it_fieldcat " catalogo de campos 
+    TABLES 
+      t_outtab           = it_ALV   " Tabela com os dados 
+    EXCEPTIONS 
+      program_error      = 1 
+      OTHERS             = 2. 
+  IF sy-subrc <> 0. 
+    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno 
+            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4. 
+  ENDIF. 
+ 
+ENDFORM.                    " Z_ALV 
