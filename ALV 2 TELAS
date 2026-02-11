@@ -1,0 +1,186 @@
+*https://abap4tod.blogspot.com/2017/03/asd-as-two-alvs-in-single-screen-ekko.html -> site que mostra como fazer 
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*& PoolMóds.        ZTELA_TESTE
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT ZTELA_TESTE.
+
+CLASS lcl_event_receiver DEFINITION DEFERRED.
+
+TYPES: BEGIN OF gty_ekko,
+        ebeln TYPE ebeln,
+        bukrs TYPE bukrs,
+        bstyp TYPE ebstyp,
+        bsart TYPE esart,
+        bsakz TYPE bsakz,
+       END OF gty_ekko.
+
+TYPES: BEGIN OF gty_ekpo,
+        ebeln TYPE ebeln,
+        ebelp TYPE ebelp,
+        loekz TYPE eloek,
+        statu TYPE astat,
+        aedat TYPE paedt,
+       END OF gty_ekpo.
+
+DATA: go_grid_1 TYPE REF TO cl_gui_alv_grid,
+      go_grid_2 TYPE REF TO cl_gui_alv_grid,
+      go_cont_1 TYPE REF TO cl_gui_custom_container,
+      go_cont_2 TYPE REF TO cl_gui_custom_container,
+      gt_ekko TYPE TABLE OF gty_ekko,
+      gs_ekko TYPE gty_ekko,
+      gt_ekpo TYPE TABLE OF gty_ekpo,
+      gs_ekpo TYPE gty_ekpo,
+      go_event_receiver TYPE REF TO lcl_event_receiver.
+
+
+START-OF-SELECTION.
+  CALL SCREEN 0100.
+
+*&---------------------------------------------------------------------*
+*&      Form  CREATE_GRID
+*&---------------------------------------------------------------------*
+*       CRIA DOIS CONTÊINERES E SUAS GRADES CORRESPONDENTES
+*----------------------------------------------------------------------*
+FORM create_grid.
+
+  CREATE OBJECT go_cont_1   "CONTAINER 1
+    EXPORTING
+      container_name = 'CUST_CONT_1'.
+
+  CREATE OBJECT go_grid_1   "GRID 1
+    EXPORTING
+      i_parent = go_cont_1.
+
+  CREATE OBJECT go_cont_2   "CONTAINER 2
+    EXPORTING
+      container_name = 'CUST_CONT_2'.
+
+  CREATE OBJECT go_grid_2   "GRID 2
+    EXPORTING
+      i_parent = go_cont_2.
+
+ENDFORM.                    " CREATE_GRID
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_GRID
+*&---------------------------------------------------------------------*
+*       EXIBIR GRADE 1 - GRADE DA ESQUERDA
+*----------------------------------------------------------------------*
+FORM display_grid1 .
+  CALL METHOD go_grid_1->set_table_for_first_display
+    EXPORTING
+      i_structure_name              = 'EKKO'
+    CHANGING
+      it_outtab                     = gt_ekko
+    EXCEPTIONS
+      invalid_parameter_combination = 1
+      program_error                 = 2
+      too_many_lines                = 3
+      OTHERS                        = 4.
+ENDFORM.                    " DISPLAY_GRID
+
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY_GRID
+*&---------------------------------------------------------------------*
+*       EXIBIR GRADE 2 - GRADE DA DIREITA
+*----------------------------------------------------------------------*
+FORM display_grid2 .
+  CALL METHOD go_grid_2->set_table_for_first_display
+    EXPORTING
+      i_structure_name              = 'EKPO'
+    CHANGING
+      it_outtab                     = gt_ekpo
+    EXCEPTIONS
+      invalid_parameter_combination = 1
+      program_error                 = 2
+      too_many_lines                = 3
+      OTHERS                        = 4.
+ENDFORM.                    " DISPLAY_GRID
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       BUSCAR DADOS DA TABELA DE CABEÇALHO 'EKKO'
+*----------------------------------------------------------------------*
+FORM get_data_ekko .
+  SELECT ebeln
+         bukrs
+         bstyp
+         bsart
+         bsakz
+  FROM ekko
+  INTO TABLE gt_ekko
+  UP TO 20 ROWS.
+ENDFORM.                    " GET_DATA
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_event_receiver DEFINITION
+*----------------------------------------------------------------------*
+*       DEFINIÇÃO DA CLASSE PARA TRATAR O EVENTO ALV - CLIQUE DUPLO
+*----------------------------------------------------------------------*
+CLASS lcl_event_receiver DEFINITION.
+  PUBLIC SECTION.
+    METHODS:
+    handle_double_click
+    FOR EVENT double_click OF cl_gui_alv_grid
+    IMPORTING e_row
+    e_column.
+ENDCLASS.                    "lcl_event_receiver DEFINITION
+
+*----------------------------------------------------------------------*
+*       CLASS lcl_event_receiver IMPLEMENTATION
+*----------------------------------------------------------------------*
+*       IMPLEMENTAÇÃO DA CLASSE PARA TRATAR O EVENTO ALV - CLIQUE DUPLO
+*----------------------------------------------------------------------*
+CLASS lcl_event_receiver IMPLEMENTATION.
+  METHOD handle_double_click.
+
+*   FETCHING THE PARTICULAR RECORD THAT HAS BEEN SELECTED IN THE ALV
+    READ TABLE gt_ekko INTO gs_ekko INDEX e_row-index.
+    IF sy-subrc EQ 0.
+      SELECT    ebeln
+                ebelp
+                loekz
+                statu
+                aedat
+           FROM ekpo
+           INTO TABLE gt_ekpo
+           WHERE ebeln = gs_ekko-ebeln.
+      IF sy-subrc EQ 0.
+        PERFORM display_grid2.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.                    "handle_double_click
+ENDCLASS.                    "lcl_event_receiver IMPLEMENTATION
+
+*&---------------------------------------------------------------------*
+*&      Module  STATUS_0100  OUTPUT
+*&---------------------------------------------------------------------*
+*       EVENTO PBO DA TELA
+*----------------------------------------------------------------------*
+MODULE status_0100 OUTPUT.
+  SET PF-STATUS 'PF_STATUS'.
+  IF go_cont_1 IS INITIAL AND go_cont_2 IS INITIAL.
+    PERFORM get_data_ekko.
+    PERFORM create_grid.
+    CREATE OBJECT go_event_receiver.
+    SET HANDLER go_event_receiver->handle_double_click FOR go_grid_1.
+    PERFORM display_grid1.
+  ENDIF.
+ENDMODULE.                 " STATUS_0100  OUTPUT
+
+*&---------------------------------------------------------------------*
+*&      Module  USER_COMMAND_0100  INPUT
+*&---------------------------------------------------------------------*
+*       PAI EVENT OF THE SCREEN
+*----------------------------------------------------------------------*
+MODULE user_command_0100 INPUT.
+  CASE sy-ucomm.
+    WHEN '&F03' OR 'BACK' OR 'BCK' OR '&F15' OR '&F12' .
+      LEAVE TO SCREEN 0.
+  ENDCASE.
+ENDMODULE.                 " USER_COMMAND_0100  INPUT
